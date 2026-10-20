@@ -1,0 +1,310 @@
+---
+title: "Data Management Lab"
+author: "Chenxi"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+---
+
+```{r}
+#load the libraries used in the project
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+#Question 1: We have already created the data folder
+
+#Question 2
+
+```{r}
+# Load the main planet dataset
+planets <- read_csv("data/Planet_list.csv")
+
+# Verify dataset dimensions and data types of numerical variables
+verification_table <- tibble(
+  Check = c(
+    "Number of rows is 866",
+    "Number of columns is 8",
+    "relative mass (earth) is numeric",
+    "relative radius is numeric",
+    "DENSITY (EARTH) is numeric"
+  ),
+  Passed = c(
+    nrow(planets) == 866,
+    ncol(planets) == 8,
+    is.numeric(planets$`relative mass (earth)`),
+    is.numeric(planets$`relative radius`),
+    is.numeric(planets$`DENSITY (EARTH)`)
+  )
+)
+
+# Display the verification results
+verification_table
+```
+#Question 3
+
+```{r}
+# Scatter plot showing the relationship between planet density and relative radius
+planets %>%
+  filter(!is.na(`relative radius`), !is.na(`DENSITY (EARTH)`)) %>%
+  ggplot(aes(x = `relative radius`, y = `DENSITY (EARTH)`)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  labs(
+    title = "Planet Density vs. Relative Radius",
+    x = "Relative Radius (Earth = 1)",
+    y = "Density (Earth = 1)"
+  ) +
+  theme_minimal()
+```
+
+#Question 4
+
+```{r}
+# Compute summary statistics of planet relative mass
+planet_mass_summary <- planets %>%
+  summarise(
+    Mean = mean(`relative mass (earth)`, na.rm = TRUE),
+    Median = median(`relative mass (earth)`, na.rm = TRUE),
+    `Standard Deviation` = sd(`relative mass (earth)`, na.rm = TRUE),
+    `Interquartile Range` = IQR(`relative mass (earth)`, na.rm = TRUE)
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Statistic",
+    values_to = "Value"
+  )
+
+# Display the summary statistics table
+planet_mass_summary
+```
+## Question 5
+
+```{r}
+# Compute the percentage of planets with a radius greater than Earth's radius
+larger_planets_percentage <- planets %>%
+  summarise(
+    `Percentage larger than Earth (%)` = mean(`relative radius` > 1, na.rm = TRUE) * 100
+  )
+
+# Display the resulting percentage in a table
+larger_planets_percentage
+```
+#Question 6
+
+```{r}
+# Identify the most extreme planets for each numerical variable
+extreme_planets <- bind_rows(
+  # Lowest and highest mass
+  planets %>% 
+    slice_min(`relative mass (earth)`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Lowest mass"),
+  planets %>% 
+    slice_max(`relative mass (earth)`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Highest mass"),
+  
+  # Smallest and largest radius
+  planets %>% 
+    slice_min(`relative radius`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Smallest radius"),
+  planets %>% 
+    slice_max(`relative radius`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Largest radius"),
+  
+  # Least dense and densest planets
+  planets %>% 
+    slice_min(`DENSITY (EARTH)`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Least dense"),
+  planets %>% 
+    slice_max(`DENSITY (EARTH)`, n = 1, with_ties = FALSE) %>% 
+    mutate(Characteristic = "Densest")
+) %>%
+  select(
+    Characteristic,
+    Planet = P_NAME,
+    `Relative Mass` = `relative mass (earth)`,
+    `Relative Radius` = `relative radius`,
+    `Density` = `DENSITY (EARTH)`
+  )
+
+# Display the extreme planets summary table
+extreme_planets
+```
+## Question 7
+
+```{r}
+# Step 1: Count the number of planets orbiting each star
+planets_per_star <- planets %>%
+  count(Star_idx, name = "planet_count")
+
+# Step 2: Plot the distribution of planet counts per star
+ggplot(planets_per_star, aes(x = factor(planet_count))) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Distribution of the Number of Planets per Star",
+    x = "Number of Planets per Star",
+    y = "Number of Stars"
+  ) +
+  theme_minimal()
+```
+## 2 Star data
+
+## Question 8
+
+```{r}
+# Load the star dataset
+stars <- read_csv("data/DATA-STARS.csv")
+
+# Quick check on the number of stars loaded (expected: 561 rows)
+nrow(stars)
+```
+## Question 9
+
+```{r}
+# Split the stellar type into three separate columns: temp_class, magnitude, and luminosity_class
+stars <- stars %>%
+  separate_wider_delim(
+    cols = `Type Of Star`,
+    delim = "|",
+    names = c("temp_class", "magnitude", "luminosity_class")
+  )
+
+# Preview the newly separated columns
+stars %>%
+  select(STAR, temp_class, magnitude, luminosity_class) %>%
+  head()
+```
+## Question 10
+
+```{r}
+# Compute the average mass of stars per temperature class
+avg_star_mass_per_class <- stars %>%
+  group_by(temp_class) %>%
+  summarise(
+    `Average Mass (Solar Masses)` = mean(`relative mass`, na.rm = TRUE)
+  )
+
+# Display the summary table
+avg_star_mass_per_class
+```
+## 3 Combined analysis
+
+## Question 11
+
+```{r}
+# Identify all unique stars that host at least one planet
+stars_with_planets <- planets %>%
+  distinct(Star_idx)
+
+# Compute the number of stars without any planets
+stars_without_planets <- stars %>%
+  filter(!Star_idx %in% stars_with_planets$Star_idx) %>%
+  summarise(
+    `Number of Stars Without Planets` = n()
+  )
+
+# Display the result
+stars_without_planets
+```
+## Question 12
+
+```{r}
+# Step 1: Compute average planet radius for each star
+avg_planet_radii <- planets %>%
+  group_by(Star_idx) %>%
+  summarise(
+    avg_planet_radius = mean(`relative radius`, na.rm = TRUE)
+  )
+
+# Step 2: Combine with the star dataset using inner_join
+star_planet_radius <- inner_join(avg_planet_radii, stars, by = "Star_idx")
+
+# Step 3: Filter out missing values to eliminate warnings, then plot
+star_planet_radius %>%
+  filter(!is.na(`Star Radius`), !is.na(avg_planet_radius)) %>%
+  ggplot(aes(x = `Star Radius`, y = avg_planet_radius)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  labs(
+    title = "Average Planet Radius vs. Star Radius",
+    x = "Star Radius (Solar Radii)",
+    y = "Average Planet Radius (Earth Radii)"
+  ) +
+  theme_minimal()
+```
+## 4 Planet characteristics
+
+## Question 13
+
+```{r}
+# Extract terrain types into a dedicated two-column data frame
+planet_terrains <- planets %>%
+  select(Planet_number, Terrain) %>%
+  separate_longer_delim(Terrain, delim = "|")
+
+# Extract climate types into a dedicated two-column data frame
+planet_climates <- planets %>%
+  select(Planet_number, Type_climate) %>%
+  separate_longer_delim(Type_climate, delim = "|")
+
+# Preview the first few rows of each newly created data frame
+head(planet_terrains)
+head(planet_climates)
+```
+## Question 14
+
+```{r}
+# Step 1: Count the number of distinct terrain types per planet
+terrains_per_planet <- planet_terrains %>%
+  filter(!is.na(Terrain)) %>%
+  distinct(Planet_number, Terrain) %>%
+  count(Planet_number, name = "nb_terrains")
+
+# Step 2: Plot the distribution of terrain type counts per planet
+ggplot(terrains_per_planet, aes(x = factor(nb_terrains))) +
+  geom_bar(fill = "forestgreen") +
+  labs(
+    title = "Distribution of the Number of Different Terrain Types per Planet",
+    x = "Number of Different Terrain Types",
+    y = "Number of Planets"
+  ) +
+  theme_minimal()
+```
+## Question 15
+
+```{r}
+# Prepare data: extract planet mass and expand the climate multivalued variable
+planet_mass_by_climate <- planets %>%
+  select(Planet_number, `relative mass (earth)`, Type_climate) %>%
+  separate_longer_delim(Type_climate, delim = "|") %>%
+  filter(!is.na(Type_climate), !is.na(`relative mass (earth)`))
+
+# Represent graphically the distribution of planet mass conditioned by climate
+ggplot(planet_mass_by_climate, aes(x = Type_climate, y = `relative mass (earth)`)) +
+  geom_boxplot(fill = "lightblue", outlier.size = 1.2) +
+  scale_y_log10() +
+  labs(
+    title = "Distribution of Planet Mass Conditioned by Climate",
+    x = "Climate Type",
+    y = "Relative Mass (Earth = 1, Log10 Scale)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+## Question 16
+
+```{r}
+# Compute the total number of distinct climates seen on planets orbiting each star
+climates_per_star <- planets %>%
+  select(Star_idx, Type_climate) %>%
+  separate_longer_delim(Type_climate, delim = "|") %>%
+  filter(!is.na(Type_climate)) %>%
+  group_by(Star_idx) %>%
+  summarise(
+    `Number of Distinct Climates` = n_distinct(Type_climate)
+  )
+
+# Display the summary table
+climates_per_star
+```
